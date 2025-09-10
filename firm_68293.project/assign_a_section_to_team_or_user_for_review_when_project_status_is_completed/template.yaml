@@ -1,0 +1,65 @@
+id: assign_a_section_to_team_or_user_for_review_when_project_status_is_completed
+namespace: firm_[[firmId]].project
+description: |
+  {
+    "createdAt":"2025-09-01T08:09:13.363Z",
+    "updatedAt":"2025-09-01T08:09:13.363Z",
+    "description":"When a project status is changed to completed and total_flag count > 1 assign whole section to a user or team for review"
+  }
+
+# use labels to 
+labels:
+  trigger: webhook
+
+triggers:
+  # Project Status completed trigger
+  - id: webhook
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: key
+    conditions:
+      - type: io.kestra.plugin.core.condition.Expression
+        expression: >-
+          {{ trigger.body.event == 'duediligence.status.updated' and
+          trigger.body.extras.duediligence.id == "[[extrasDuediligenceId]]" and
+          trigger.body.after.status| lower == 'completed' and
+          trigger.body.extras.tofirm.id == "[[extrasTofirmId]]" and
+          trigger.body.extras.duediligence.total_flags >= 1 }}
+tasks:
+  #  Get access token from DV
+  - id: task_get_dv_access_token
+    type: com.diligencevault.plugin.core.tasks.GetToken
+    apihost: https://dv-feature-api.diligencevault.com
+    email: "{{trigger.body.auth.email}}"
+    firmID: "{{trigger.body.extras.firm.fromfirm.id}}"
+    allowInsecure: true
+
+
+  - id: assign_section_review
+    type: com.diligencevault.plugin.core.tasks.AssignSectionReview
+    apihost: https://dv-feature-api.diligencevault.com
+    projectID: '{{trigger.body.extras.duediligence.id}}'
+    sectionID: 56223
+    filter_id: 1
+    review_type: Approve
+    token: "{{outputs.get_access_token.token)}}"
+    allowInsecure: true
+    assignment_steps: |
+      [
+        {
+          "assignments": [
+            {
+              "assigned_to_function_id": [[assigned_to_function_id]],
+              "is_mandatory": true,
+              "is_active": true,
+              "due_at": "{{ now() |dateAdd(3, 'DAYS')|date('MM-dd-yyyy')}}",
+              "time_value": 3,
+              "time_unit": "days",
+              "id": 0
+            }
+          ],
+          "no_of_approval_required": 1,
+          "order": 2,
+          "is_active": true,
+          "id": 0
+        }
+      ]
