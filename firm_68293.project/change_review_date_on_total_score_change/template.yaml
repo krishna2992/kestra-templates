@@ -1,0 +1,51 @@
+id: change_review_date_on_total_score_change
+namespace: firm_68293.project
+description: |
+  Following Flow listens for rating change events for firm 68293
+  If changed rating is >  3  and manager type is 'asset manager' will set age and review_date custom field
+
+labels: 
+  trigger: webhook
+
+triggers: 
+
+  - id: webhook
+    type: io.kestra.plugin.core.trigger.Webhook
+    key: key
+    conditions:
+      - type: io.kestra.plugin.core.condition.Expression
+        expression: "{{trigger.body.event ==  'duediligence.total_score.updated' and trigger.body.after.total_score > 3 and trigger.body.extras.firm.tofirm.firm_type|lower == 'asset manager'}}"
+  
+
+tasks:
+  # Log trigger.body
+  - id: log_payload
+    type: io.kestra.plugin.core.log.Log
+    message: "{{trigger.body}}"
+  
+  # Get access token from DV API. This token can be used in subsequent DV Tasks and DV API requests 
+  - id: get_access_token
+    type: com.diligencevault.plugin.core.tasks.GetToken
+    apihost: "https://dv-feature-api.diligencevault.com"
+    email: "{{trigger.body.auth.email}}"
+    firmID: "{{trigger.body.extras.firm.fromfirm.id}}"
+    allowInsecure: true
+  
+  # Change Review Date Custom Field on change in rating
+  - id: set_review_date
+    type: com.diligencevault.plugin.core.tasks.CustomFieldUpdate
+    apihost: "https://dv-feature-api.diligencevault.com"
+    allowInsecure: true
+    entityId: "{{trigger.body.extras.duediligence.id}}"
+    fields:
+      age:
+        - value: 12 
+      review_date: 
+        - value: "{{now()|dateAdd(10, 'DAYS')}}"
+    
+    # Use Access token generated with second step
+    token: "{{outputs.get_access_token.token}}"
+    schemaType: duediligence
+
+
+
